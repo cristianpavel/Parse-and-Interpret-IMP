@@ -19,63 +19,47 @@ p1 .||. p2 = Parser (\s -> case apply p1 s of
                         [] -> apply p2 s
                         x -> x)
 
-bind :: (Parser a) -> (a -> Parser b) -> (Parser b)
-p1 `bind` f = Parser (\s -> case apply p1 s of
-                                    [] -> []
-                                    [(r, s)] -> apply (f s) r)
+rreturn :: a -> (Parser a)
+rreturn x = Parser (\s -> [(s, x)])
 
-rreturn :: a -> Parser a
-rreturn x = Parser (\s -> [(s, x)]) 
+instance Functor Parser where
+    fmap f p = (pure f) <*> p
 
-plus :: (Parser a) -> (Parser [a])
-plus p = p `bind` (\x -> (star p) `bind` (\y -> rreturn (x:y)))
 
-star :: (Parser a) -> (Parser [a])
+instance Applicative Parser where
+    pure = rreturn
+    pf <*> p = Parser (\s -> case apply pf s of
+                                [] -> []
+                                [(r, f)] -> case apply p r of
+                                                [] -> []
+                                                [(r1, s)] -> [(r1, f s)])
+
+plus p = (:) <$> p <*> star p
 star p = (plus p) .||. (rreturn [])
+maybeOnce p = ((:[]) <$>  p) .||. (rreturn [])
 
 parseWs :: Parser String
-parseWs = plus (parseChar (\x -> x `elem` whitespace)) 
+parseWs = plus (parseChar (\x -> x `elem` whitespace))
 
 parseAlpha = parseChar (isAlpha)
 parseAlphaNum = parseChar (isAlphaNum)
 
 parseDigit = parseChar (isDigit)
 
---un char incadrat de white spaces
-parseCharWs :: (Char -> Bool) -> (Parser Char)
-parseCharWs f = (star parseWs) `bind` (\_ -> (parseChar f) `bind` (\y -> star parseWs `bind` (\_ -> rreturn y))) 
-
 parseVar :: Parser AExpr
-parseVar = (plus (parseAlpha) `bind` (\x -> (star parseAlphaNum) `bind` (\y -> rreturn (x ++ y)))) `bind` (\x -> rreturn (Var x))
-
--- '?' din regex
-mostlyOnce :: (Parser a) -> (Parser [a])
-mostlyOnce p = (p `bind` (\x -> rreturn [x])) .||. (rreturn [])
+parseVar = (\x y -> Var (x++y)) <$> (plus (parseAlpha)) <*> (star (parseAlphaNum))
 
 parseAVal :: Parser AExpr
-parseAVal = ((mostlyOnce (parseChar (== '-'))) `bind` (\x -> (plus parseDigit) `bind` (\y -> rreturn (x++y)))) `bind` (\x -> rreturn (AVal (read x :: Integer)))
+parseAVal = (\x y -> (AVal (read (x++y):: Integer))) <$> maybeOnce (parseChar (== '-')) <*> plus (parseDigit)
 
---{whitespace}*+{whitespace}*({variable}|{number})
-parseSemiSum :: Parser AExpr
-parseSemiSum = (parseCharWs (== '+')) `bind` (\_ -> (parseVar .||. parseAVal) `bind` (\y -> rreturn (y)))
-
-
-multiplePlus = foldr Plus (AVal 0) 
+parseCharInWs :: (Char -> Bool) -> Parser Char
+parseCharInWs f = (\x y z -> y) <$> star (parseWs) <*> parseChar f <*> star parseWs
 
 parseSum :: Parser AExpr
-parseSum = (parseVar .||. parseAVal) `bind` (\x -> (plus (parseSemiSum) `bind` (\y -> rreturn (multiplePlus y))) `bind` (\y -> rreturn (Plus x y)))
-
-parseAExpr :: Parser AExpr
-parseAExpr = (parseSum .||. parseVar) .||. parseAVal
+parseSum = (\x y -> Plus x (Prelude.foldr Plus (AVal 0) y))<$> (parseVar .||. parseAVal) <*> plus ((\x y -> y) <$> parseCharInWs (=='+') <*> parseVar .||. parseAVal)
 
 parseEqual :: Parser Stmt
-parseEqual = parseVar `bind` (\(Var x) -> parseCharWs (== '=') `bind` (\_ -> parseAExpr `bind` (\y -> rreturn (Equal x y))))
+parseEqual = (\(Var x) y z-> Equal x z) <$> parseVar <*> parseCharInWs (=='=') <*> (parseSum .||. parseVar .||. parseAVal)
 
-parseColon :: Parser Stmt
-parseColon = (parseCharWs (== ';')) `bind` (\_ -> parseEqual)
 
-multipleColons = foldr Colon (Void)
-
-parseInstr :: Parser Stmt
-parseInstr = parseEqual `bind` (\x -> (plus (parseColon) `bind` (\y -> rreturn (multipleColons y))) `bind` (\y -> rreturn (Colon x y)))
 
