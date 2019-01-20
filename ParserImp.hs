@@ -8,6 +8,7 @@ data BExpr = BTrue | BFalse | And BExpr BExpr | Greater AExpr AExpr | BEncaps BE
 data Stmt = Void | While BExpr Stmt | Equal String AExpr | If BExpr Stmt Stmt | Colon Stmt Stmt deriving Show
 data Parser a = Parser {apply :: String -> [(String, a)]}
 
+
 whitespace = [' ', '\n', '\t']
 
 parseChar :: (Char -> Bool) -> Parser Char
@@ -152,4 +153,7 @@ parseBlock = (\x y z -> y)
              
 
 parseProg = parseColon <|> parseStmt <|> pure Void
+
+
+
 
