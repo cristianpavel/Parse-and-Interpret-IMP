@@ -21,11 +21,10 @@ instance Monad (Interpreter) where
                                     [(r, y)] -> eval (f y) r) 
 
 
-type Algebra f m a = (f (m a)) -> m a
+type Algebra f m a = (f (Fix f) (m a)) -> m a
 
-cata :: (Functor f) => (f a -> a) -> (Fix f) -> a
+cata :: (Functor (f (Fix f))) => ((f (Fix f) a) -> a) -> (Fix f) -> a
 cata alg = alg.(fmap (cata alg)).unFix
-
 
 updateValue :: (String, Integer) -> Interpreter ReturnType 
 updateValue (k,v) = Interpreter (\s -> let s1 = insert k v s in [(s1, (I 0))]) 
@@ -56,10 +55,7 @@ evall x@(WhileF cond block) = do (B c) <- cond
 			      	 else
 				 	return Null
 evall (IfF cond t f) = do (B c) <- cond
-			  if c then
-				do t
-			  else
-				do f
+			  evallHelp $ if c then t else f
 
 evall (EqualF s assg) = do (I x) <- assg
 			   updateValue (s, x)
@@ -67,6 +63,10 @@ evall (EqualF s assg) = do (I x) <- assg
 
 evall (ColonF x y) = do x
 		        y
+
+evallHelp :: (Fix StmtF) -> Interpreter ReturnType
+evallHelp = cata evall
+
 
 evaluateProgram :: String -> State
 evaluateProgram x = fst $ head (eval (cata evall (snd $ head (apply parseProgF x))) empty)

@@ -4,8 +4,8 @@ module ParserFix where
 import ParserImp
 import Control.Applicative
 
-data StmtF a = VoidF | BVal Bool | AndF a a | GreaterF a a | VarF String | AValF Integer | PlusF a a | WhileF a a | EqualF String a | IfF a a a | ColonF a a deriving Functor 
-data Fix f = Fix { unFix :: f (Fix f) }
+data StmtF b a = VoidF | BVal Bool | AndF a a | GreaterF a a | VarF String | AValF Integer | PlusF a a | WhileF a a | EqualF String a | IfF a b b | ColonF a a deriving Functor 
+data Fix f = Fix { unFix :: f (Fix f) (Fix f) }
 
 
 parseVarF = (\x y -> Fix (VarF (x++y)))
